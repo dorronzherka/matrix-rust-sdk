@@ -340,6 +340,23 @@ impl SecretStorageKey {
 
         key
     }
+    
+    /// Create a new secret storage key based on given 32 byte key 
+    pub fn new_from_bytes(k: [u8; 32]) -> Self{
+        let mut key = Box::new(k);
+        let mut rng = thread_rng();
+        rng.fill_bytes(key.as_mut_slice());
+       
+        let key_id = Alphanumeric.sample_string(&mut rng, Self::DEFAULT_KEY_ID_LEN);
+        Self::from_bytes(key_id, key)
+    }
+
+
+    /// Create a new secret storage key based on given 32 byte key and key_id string value
+    pub fn new_from_bytes_and_key_id(k: [u8; 32], key_id: String) -> Self{
+        let key = Box::new(k);
+        Self::from_bytes(key_id, key)
+    }
 
     pub(crate) fn from_bytes(key_id: String, key: Box<[u8; KEY_SIZE]>) -> Self {
         let storage_key_info = Self::create_event_content(key_id.to_owned(), &key);

@@ -25,6 +25,8 @@ use super::{Result, SecretStorage, SecretStore};
 pub struct CreateStore<'a> {
     pub(super) secret_storage: &'a SecretStorage,
     pub(super) passphrase: Option<&'a str>,
+    pub(super) key: Option<&'a[u8; 32]>,
+    pub(super) key_id: Option<&'a str>
 }
 
 impl<'a> CreateStore<'a> {
@@ -37,6 +39,15 @@ impl<'a> CreateStore<'a> {
 
         self
     }
+   /// Set the 32 byte array for the new [`SecretStore`]
+   ///
+   /// See the documentation for the [`SecretStorage::create_secret_store()`]
+   /// method for more info
+   pub fn with_key(mut self, key: &'a[u8; 32]) -> Self {
+      self.key = Some(key);
+
+      self
+   }
 }
 
 impl<'a> IntoFuture for CreateStore<'a> {
@@ -47,7 +58,7 @@ impl<'a> IntoFuture for CreateStore<'a> {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + Send + 'a>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        let Self { secret_storage, passphrase } = self;
+        let Self { secret_storage, passphrase, key , key_id} = self;
 
         Box::pin(async move {
             // Prevent multiple simultaneous calls to this method.
@@ -59,6 +70,12 @@ impl<'a> IntoFuture for CreateStore<'a> {
 
             let new_key = if let Some(passphrase) = passphrase {
                 SecretStorageKey::new_from_passphrase(passphrase)
+            } else if let Some(key) = key {
+                if let Some(key_id) = key_id {
+                    SecretStorageKey::new_from_bytes_and_key_id(*key, key_id.to_owned())
+                } else {
+                    SecretStorageKey::new_from_bytes(*key)
+                }
             } else {
                 SecretStorageKey::new()
             };

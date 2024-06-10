@@ -59,12 +59,7 @@ use tokio::sync::RwLockReadGuard;
 use tracing::{debug, error, instrument, trace, warn};
 
 use self::{
-    backups::{types::BackupClientState, Backups},
-    futures::PrepareEncryptedFile,
-    identities::{DeviceUpdates, IdentityUpdates},
-    recovery::{Recovery, RecoveryState},
-    secret_storage::SecretStorage,
-    tasks::{BackupDownloadTask, BackupUploadingTask, ClientTasks},
+    backups::{types::BackupClientState, Backups}, dehydrated_devices::DehydratedDevices, futures::PrepareEncryptedFile, identities::{DeviceUpdates, IdentityUpdates}, recovery::{Recovery, RecoveryState}, secret_storage::SecretStorage, tasks::{BackupDownloadTask, BackupUploadingTask, ClientTasks}
 };
 use crate::{
     attachment::{AttachmentConfig, Thumbnail},
@@ -85,6 +80,7 @@ pub mod recovery;
 pub mod secret_storage;
 pub(crate) mod tasks;
 pub mod verification;
+pub mod dehydrated_devices;
 
 pub use matrix_sdk_base::crypto::{
     olm::{
@@ -1203,6 +1199,11 @@ impl Encryption {
     /// Get the recovery manager of the client.
     pub fn recovery(&self) -> Recovery {
         Recovery { client: self.client.to_owned() }
+    }
+
+    /// Get dehydrated devices manager of client.
+    pub fn dehydrated_devices(&self) -> DehydratedDevices {
+        DehydratedDevices {  client: self.client.to_owned() }
     }
 
     /// Enables the crypto-store cross-process lock.
