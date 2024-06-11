@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// TODO(pixlwave) Move AuthenticationService from the FFI into this module.
+//! Types and functions related to authentication in Matrix.
 
-use std::pin::Pin;
+// TODO:(pixlwave) Move AuthenticationService from the FFI into this module.
+// TODO:(poljar) Move the oidc and matrix_auth modules under this module.
 
 use as_variant::as_variant;
-use futures_core::Future;
 use matrix_sdk_base::SessionMeta;
 use tokio::sync::{broadcast, Mutex, OnceCell};
 
@@ -27,6 +27,9 @@ use crate::{
     matrix_auth::{self, MatrixAuth, MatrixAuthData},
     Client, RefreshTokenError, SessionChange,
 };
+
+#[cfg(all(feature = "experimental-oidc", feature = "e2e-encryption", not(target_arch = "wasm32")))]
+pub mod qrcode;
 
 /// Session tokens, for any kind of authentication.
 #[allow(missing_debug_implementations, clippy::large_enum_variant)]
@@ -39,9 +42,8 @@ pub enum SessionTokens {
 }
 
 pub(crate) type SessionCallbackError = Box<dyn std::error::Error + Send + Sync>;
-pub(crate) type SaveSessionCallback = dyn Fn(Client) -> Pin<Box<dyn Send + Sync + Future<Output = Result<(), SessionCallbackError>>>>
-    + Send
-    + Sync;
+pub(crate) type SaveSessionCallback =
+    dyn Fn(Client) -> Result<(), SessionCallbackError> + Send + Sync;
 pub(crate) type ReloadSessionCallback =
     dyn Fn(Client) -> Result<SessionTokens, SessionCallbackError> + Send + Sync;
 

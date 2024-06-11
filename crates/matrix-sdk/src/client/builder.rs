@@ -38,7 +38,7 @@ use crate::http_client::HttpSettings;
 use crate::oidc::OidcCtx;
 use crate::{
     authentication::AuthCtx, config::RequestConfig, error::RumaApiError, http_client::HttpClient,
-    HttpError, IdParseError,
+    send_queue::SendQueueData, HttpError, IdParseError,
 };
 
 /// Builder that allows creating and configuring various parts of a [`Client`].
@@ -453,6 +453,7 @@ impl ClientBuilder {
         });
 
         let event_cache = OnceCell::new();
+        let send_queue = Arc::new(SendQueueData::new(true));
         let inner = ClientInner::new(
             auth_ctx,
             homeserver,
@@ -464,6 +465,7 @@ impl ClientBuilder {
             None,
             self.respect_login_well_known,
             event_cache,
+            send_queue,
             #[cfg(feature = "e2e-encryption")]
             self.encryption_settings,
         )
@@ -587,6 +589,7 @@ async fn check_is_homeserver(homeserver_url: &Url, http_client: &HttpClient) -> 
     }
 }
 
+#[allow(clippy::unused_async)] // False positive when building with !sqlite & !indexeddb
 async fn build_store_config(
     builder_config: BuilderStoreConfig,
 ) -> Result<StoreConfig, ClientBuildError> {

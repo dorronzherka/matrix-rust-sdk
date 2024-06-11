@@ -510,9 +510,10 @@ impl RoomListItem {
         Ok(RoomInfo::new(self.inner.inner_room(), latest_event).await?)
     }
 
-    /// Building a `Room`. If its internal timeline hasn't been initialized
-    /// it'll fail.
-    async fn full_room(&self) -> Result<Arc<Room>, RoomListError> {
+    /// Build a full `Room` FFI object, filling its associated timeline.
+    ///
+    /// If its internal timeline hasn't been initialized, it'll fail.
+    fn full_room(&self) -> Result<Arc<Room>, RoomListError> {
         if let Some(timeline) = self.inner.timeline() {
             Ok(Arc::new(Room::with_timeline(
                 self.inner.inner_room().clone(),
@@ -615,6 +616,7 @@ pub struct RequiredState {
 pub struct RoomSubscription {
     pub required_state: Option<Vec<RequiredState>>,
     pub timeline_limit: Option<u32>,
+    pub include_heroes: Option<bool>,
 }
 
 impl From<RoomSubscription> for RumaRoomSubscription {
@@ -623,7 +625,8 @@ impl From<RoomSubscription> for RumaRoomSubscription {
             required_state: val.required_state.map(|r|
                 r.into_iter().map(|s| (s.key.into(), s.value)).collect()
             ).unwrap_or_default(),
-            timeline_limit: val.timeline_limit.map(|u| u.into())
+            timeline_limit: val.timeline_limit.map(|u| u.into()),
+            include_heroes: val.include_heroes,
         })
     }
 }

@@ -99,7 +99,7 @@ pub enum HttpError {
 
     /// An error converting between ruma_*_api types and Hyper types.
     #[error(transparent)]
-    Api(FromHttpResponseError<RumaApiError>),
+    Api(#[from] FromHttpResponseError<RumaApiError>),
 
     /// An error converting between ruma_client_api types and Hyper types.
     #[error(transparent)]
@@ -403,6 +403,10 @@ pub enum ImageError {
     /// Error processing the image data.
     #[error(transparent)]
     Proc(#[from] image::ImageError),
+
+    /// Error parsing the mimetype of the image.
+    #[error(transparent)]
+    Mime(#[from] mime::FromStrError),
 
     /// The image format is not supported.
     #[error("the image format is not supported")]

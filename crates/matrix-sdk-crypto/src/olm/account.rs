@@ -400,7 +400,11 @@ pub type OneTimeKeys = BTreeMap<OwnedDeviceKeyId, Raw<ruma::encryption::OneTimeK
 pub type FallbackKeys = OneTimeKeys;
 
 impl Account {
-    fn new_helper(mut account: InnerAccount, user_id: &UserId, device_id: &DeviceId) -> Self {
+    pub(crate) fn new_helper(
+        mut account: InnerAccount,
+        user_id: &UserId,
+        device_id: &DeviceId,
+    ) -> Self {
         let identity_keys = account.identity_keys();
 
         // Let's generate some initial one-time keys while we're here. Since we know
@@ -689,7 +693,7 @@ impl Account {
         Raw::from_json(to_raw_value(&data).expect("Couldn't serialize our dehydrated device data"))
     }
 
-    pub(crate) async fn rehydrate(
+    pub(crate) fn rehydrate(
         pickle_key: &[u8; 32],
         user_id: &UserId,
         device_id: &DeviceId,

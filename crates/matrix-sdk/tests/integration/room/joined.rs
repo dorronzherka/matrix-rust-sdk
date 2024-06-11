@@ -5,30 +5,23 @@ use std::{
 
 use futures_util::future::join_all;
 use matrix_sdk::{
-    attachment::{
-        AttachmentConfig, AttachmentInfo, BaseImageInfo, BaseThumbnailInfo, BaseVideoInfo,
-        Thumbnail,
-    },
     config::SyncSettings,
     room::{Receipts, ReportedContentScore, RoomMemberRole},
 };
 use matrix_sdk_base::RoomState;
 use matrix_sdk_test::{
     async_test, test_json, test_json::sync::CUSTOM_ROOM_POWER_LEVELS, EphemeralTestEvent,
-    JoinedRoomBuilder, SyncResponseBuilder, DEFAULT_TEST_ROOM_ID,
+    GlobalAccountDataTestEvent, JoinedRoomBuilder, SyncResponseBuilder, DEFAULT_TEST_ROOM_ID,
 };
 use ruma::{
     api::client::{membership::Invite3pidInit, receipt::create_receipt::v3::ReceiptType},
     assign, event_id,
-    events::{
-        receipt::ReceiptThread, room::message::RoomMessageEventContent, Mentions, TimelineEventType,
-    },
-    int, mxc_uri, owned_event_id, owned_user_id, room_id, thirdparty, uint, user_id, OwnedUserId,
-    TransactionId,
+    events::{receipt::ReceiptThread, room::message::RoomMessageEventContent, TimelineEventType},
+    int, mxc_uri, owned_event_id, room_id, thirdparty, user_id, OwnedUserId, TransactionId,
 };
-use serde_json::json;
+use serde_json::{json, Value};
 use wiremock::{
-    matchers::{body_json, body_partial_json, header, method, path, path_regex},
+    matchers::{body_json, body_partial_json, header, method, path_regex},
     Mock, ResponseTemplate,
 };
 
@@ -337,279 +330,6 @@ async fn test_room_message_send() {
 }
 
 #[async_test]
-async fn test_room_attachment_send() {
-    let (client, server) = logged_in_client_with_server().await;
-
-    Mock::given(method("PUT"))
-        .and(path_regex(r"^/_matrix/client/r0/rooms/.*/send/.*"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(body_partial_json(json!({
-            "info": {
-                "mimetype": "image/jpeg",
-            }
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::EVENT_ID))
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/_matrix/media/r0/upload"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(header("content-type", "image/jpeg"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-          "content_uri": "mxc://example.com/AQwafuaFswefuhsfAFAgsw"
-        })))
-        .mount(&server)
-        .await;
-
-    mock_sync(&server, &*test_json::SYNC, None).await;
-    mock_encryption_state(&server, false).await;
-
-    let sync_settings = SyncSettings::new().timeout(Duration::from_millis(3000));
-
-    let _response = client.sync_once(sync_settings).await.unwrap();
-
-    let room = client.get_room(&DEFAULT_TEST_ROOM_ID).unwrap();
-
-    let response = room
-        .send_attachment(
-            "image",
-            &mime::IMAGE_JPEG,
-            b"Hello world".to_vec(),
-            AttachmentConfig::new(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(event_id!("$h29iv0s8:example.com"), response.event_id)
-}
-
-#[async_test]
-async fn test_room_attachment_send_info() {
-    let (client, server) = logged_in_client_with_server().await;
-
-    Mock::given(method("PUT"))
-        .and(path_regex(r"^/_matrix/client/r0/rooms/.*/send/.*"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(body_partial_json(json!({
-            "info": {
-                "mimetype": "image/jpeg",
-                "h": 600,
-                "w": 800,
-            }
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::EVENT_ID))
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/_matrix/media/r0/upload"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(header("content-type", "image/jpeg"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-          "content_uri": "mxc://example.com/AQwafuaFswefuhsfAFAgsw"
-        })))
-        .mount(&server)
-        .await;
-
-    mock_sync(&server, &*test_json::SYNC, None).await;
-    mock_encryption_state(&server, false).await;
-
-    let sync_settings = SyncSettings::new().timeout(Duration::from_millis(3000));
-
-    let _response = client.sync_once(sync_settings).await.unwrap();
-
-    let room = client.get_room(&DEFAULT_TEST_ROOM_ID).unwrap();
-
-    let config = AttachmentConfig::new()
-        .info(AttachmentInfo::Image(BaseImageInfo {
-            height: Some(uint!(600)),
-            width: Some(uint!(800)),
-            size: None,
-            blurhash: None,
-        }))
-        .caption(Some("image caption".to_owned()));
-
-    let response = room
-        .send_attachment("image.jpg", &mime::IMAGE_JPEG, b"Hello world".to_vec(), config)
-        .await
-        .unwrap();
-
-    assert_eq!(event_id!("$h29iv0s8:example.com"), response.event_id)
-}
-
-#[async_test]
-async fn test_room_attachment_send_wrong_info() {
-    let (client, server) = logged_in_client_with_server().await;
-
-    Mock::given(method("PUT"))
-        .and(path_regex(r"^/_matrix/client/r0/rooms/.*/send/.*"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(body_partial_json(json!({
-            "info": {
-                "mimetype": "image/jpeg",
-                "h": 600,
-                "w": 800,
-            }
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::EVENT_ID))
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/_matrix/media/r0/upload"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(header("content-type", "image/jpeg"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-          "content_uri": "mxc://example.com/AQwafuaFswefuhsfAFAgsw"
-        })))
-        .mount(&server)
-        .await;
-
-    mock_sync(&server, &*test_json::SYNC, None).await;
-    mock_encryption_state(&server, false).await;
-
-    let sync_settings = SyncSettings::new().timeout(Duration::from_millis(3000));
-
-    let _response = client.sync_once(sync_settings).await.unwrap();
-
-    let room = client.get_room(&DEFAULT_TEST_ROOM_ID).unwrap();
-
-    let config = AttachmentConfig::new()
-        .info(AttachmentInfo::Video(BaseVideoInfo {
-            height: Some(uint!(600)),
-            width: Some(uint!(800)),
-            duration: Some(Duration::from_millis(3600)),
-            size: None,
-            blurhash: None,
-        }))
-        .caption(Some("image caption".to_owned()));
-
-    let response =
-        room.send_attachment("image.jpg", &mime::IMAGE_JPEG, b"Hello world".to_vec(), config).await;
-
-    response.unwrap_err();
-}
-
-#[async_test]
-async fn test_room_attachment_send_info_thumbnail() {
-    let (client, server) = logged_in_client_with_server().await;
-
-    Mock::given(method("PUT"))
-        .and(path_regex(r"^/_matrix/client/r0/rooms/.*/send/.*"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(body_partial_json(json!({
-            "info": {
-                "mimetype": "image/jpeg",
-                "h": 600,
-                "w": 800,
-                "thumbnail_info": {
-                    "h": 360,
-                    "w": 480,
-                    "mimetype":"image/jpeg",
-                    "size": 3600,
-                },
-                "thumbnail_url": "mxc://example.com/AQwafuaFswefuhsfAFAgsw",
-            }
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::EVENT_ID))
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/_matrix/media/r0/upload"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(header("content-type", "image/jpeg"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-          "content_uri": "mxc://example.com/AQwafuaFswefuhsfAFAgsw"
-        })))
-        .expect(2)
-        .mount(&server)
-        .await;
-
-    mock_sync(&server, &*test_json::SYNC, None).await;
-    mock_encryption_state(&server, false).await;
-
-    let sync_settings = SyncSettings::new().timeout(Duration::from_millis(3000));
-
-    let _response = client.sync_once(sync_settings).await.unwrap();
-
-    let room = client.get_room(&DEFAULT_TEST_ROOM_ID).unwrap();
-
-    let config = AttachmentConfig::with_thumbnail(Thumbnail {
-        data: b"Thumbnail".to_vec(),
-        content_type: mime::IMAGE_JPEG,
-        info: Some(BaseThumbnailInfo {
-            height: Some(uint!(360)),
-            width: Some(uint!(480)),
-            size: Some(uint!(3600)),
-        }),
-    })
-    .info(AttachmentInfo::Image(BaseImageInfo {
-        height: Some(uint!(600)),
-        width: Some(uint!(800)),
-        size: None,
-        blurhash: None,
-    }));
-
-    let response = room
-        .send_attachment("image", &mime::IMAGE_JPEG, b"Hello world".to_vec(), config)
-        .await
-        .unwrap();
-
-    assert_eq!(event_id!("$h29iv0s8:example.com"), response.event_id)
-}
-
-#[async_test]
-async fn test_room_attachment_send_mentions() {
-    let (client, server) = logged_in_client_with_server().await;
-
-    Mock::given(method("PUT"))
-        .and(path_regex(r"^/_matrix/client/r0/rooms/.*/send/.*"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(body_partial_json(json!({
-            "m.mentions": {
-                "user_ids": ["@user:localhost"],
-            }
-        })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(&*test_json::EVENT_ID))
-        .mount(&server)
-        .await;
-
-    Mock::given(method("POST"))
-        .and(path("/_matrix/media/r0/upload"))
-        .and(header("authorization", "Bearer 1234"))
-        .and(header("content-type", "image/jpeg"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-          "content_uri": "mxc://example.com/AQwafuaFswefuhsfAFAgsw"
-        })))
-        .mount(&server)
-        .await;
-
-    mock_sync(&server, &*test_json::SYNC, None).await;
-    mock_encryption_state(&server, false).await;
-
-    let sync_settings = SyncSettings::new().timeout(Duration::from_millis(3000));
-
-    let _response = client.sync_once(sync_settings).await.unwrap();
-
-    let room = client.get_room(&DEFAULT_TEST_ROOM_ID).unwrap();
-
-    let response = room
-        .send_attachment(
-            "image",
-            &mime::IMAGE_JPEG,
-            b"Hello world".to_vec(),
-            AttachmentConfig::new()
-                .mentions(Some(Mentions::with_user_ids([owned_user_id!("@user:localhost")]))),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(event_id!("$h29iv0s8:example.com"), response.event_id)
-}
-
-#[async_test]
 async fn test_room_redact() {
     let (client, server) = synced_client().await;
 
@@ -907,4 +627,89 @@ async fn test_reset_power_levels() {
     assert_eq!(initial_power_levels.events[&TimelineEventType::RoomAvatar], int!(100));
 
     room.reset_power_levels().await.unwrap();
+}
+
+#[async_test]
+async fn test_call_notifications_ring_for_dms() {
+    let (client, server) = logged_in_client_with_server().await;
+
+    let mut sync_builder = SyncResponseBuilder::new();
+    sync_builder.add_joined_room(JoinedRoomBuilder::default());
+    sync_builder.add_global_account_data_event(GlobalAccountDataTestEvent::Direct);
+
+    mock_sync(&server, sync_builder.build_json_sync_response(), None).await;
+    mock_encryption_state(&server, false).await;
+
+    let sync_settings = SyncSettings::new().timeout(Duration::from_millis(3000));
+    let _response = client.sync_once(sync_settings).await.unwrap();
+
+    let room = client.get_room(&DEFAULT_TEST_ROOM_ID).unwrap();
+    assert!(room.is_direct().await.unwrap());
+    assert!(!room.has_active_room_call());
+
+    Mock::given(method("PUT"))
+        .and(path_regex(r"^/_matrix/client/r0/rooms/.*/send/.*"))
+        .and({
+            move |request: &wiremock::Request| {
+                let content: Value = request.body_json().expect("The body should be a JSON body");
+                assert_eq!(
+                    content,
+                    json!({
+                        "application": "m.call",
+                        "call_id": DEFAULT_TEST_ROOM_ID.to_string(),
+                        "m.mentions": {"room" :true},
+                        "notify_type": "ring"
+                    }),
+                );
+                true
+            }
+        })
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"event_id": "$event_id"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    room.send_call_notification_if_needed().await.unwrap();
+}
+
+#[async_test]
+async fn test_call_notifications_notify_for_rooms() {
+    let (client, server) = logged_in_client_with_server().await;
+
+    let mut sync_builder = SyncResponseBuilder::new();
+    sync_builder.add_joined_room(JoinedRoomBuilder::default());
+
+    mock_sync(&server, sync_builder.build_json_sync_response(), None).await;
+    mock_encryption_state(&server, false).await;
+
+    let sync_settings = SyncSettings::new().timeout(Duration::from_millis(3000));
+    let _response = client.sync_once(sync_settings).await.unwrap();
+
+    let room = client.get_room(&DEFAULT_TEST_ROOM_ID).unwrap();
+    assert!(!room.is_direct().await.unwrap());
+    assert!(!room.has_active_room_call());
+
+    Mock::given(method("PUT"))
+        .and(path_regex(r"^/_matrix/client/r0/rooms/.*/send/.*"))
+        .and({
+            move |request: &wiremock::Request| {
+                let content: Value = request.body_json().expect("The body should be a JSON body");
+                assert_eq!(
+                    content,
+                    json!({
+                        "application": "m.call",
+                        "call_id": DEFAULT_TEST_ROOM_ID.to_string(),
+                        "m.mentions": {"room" :true},
+                        "notify_type": "notify"
+                    }),
+                );
+                true
+            }
+        })
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"event_id": "$event_id"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    room.send_call_notification_if_needed().await.unwrap();
 }

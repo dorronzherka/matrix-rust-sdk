@@ -69,6 +69,7 @@ enum FeatureSet {
     Markdown,
     Socks,
     SsoLogin,
+    ImageProc,
 }
 
 #[derive(Subcommand, PartialEq, Eq, PartialOrd, Ord)]
@@ -178,7 +179,10 @@ fn check_typos() -> Result<()> {
 
 fn check_clippy() -> Result<()> {
     cmd!("rustup run {NIGHTLY} cargo clippy --all-targets --features testing -- -D warnings")
+        // Work around https://github.com/rust-lang/cargo/issues/10744
+        .env("CARGO_TARGET_APPLIES_TO_HOST", "true")
         .run()?;
+
     cmd!(
         "rustup run {NIGHTLY} cargo clippy --workspace --all-targets
             --exclude matrix-sdk-crypto --exclude xtask
@@ -186,12 +190,16 @@ fn check_clippy() -> Result<()> {
             --features native-tls,experimental-sliding-sync,sso-login,testing
             -- -D warnings"
     )
+    .env("CARGO_TARGET_APPLIES_TO_HOST", "true")
     .run()?;
+
     cmd!(
         "rustup run {NIGHTLY} cargo clippy --all-targets -p matrix-sdk-crypto
             --no-default-features -- -D warnings"
     )
+    .env("CARGO_TARGET_APPLIES_TO_HOST", "true")
     .run()?;
+
     Ok(())
 }
 
@@ -218,6 +226,7 @@ fn run_feature_tests(cmd: Option<FeatureSet>) -> Result<()> {
         (FeatureSet::Markdown, "--features markdown,testing"),
         (FeatureSet::Socks, "--features socks,testing"),
         (FeatureSet::SsoLogin, "--features sso-login,testing"),
+        (FeatureSet::ImageProc, "--features image-proc,testing"),
     ]);
 
     let run = |arg_set: &str| {

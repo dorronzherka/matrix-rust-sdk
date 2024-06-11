@@ -17,7 +17,10 @@ use std::sync::Arc;
 use as_variant::as_variant;
 use eyeball_im::{ObservableVectorTransaction, ObservableVectorTransactionEntry};
 use indexmap::{map::Entry, IndexMap};
-use matrix_sdk::{crypto::types::events::UtdCause, deserialized_responses::EncryptionInfo};
+use matrix_sdk::{
+    crypto::types::events::UtdCause, deserialized_responses::EncryptionInfo,
+    send_queue::AbortSendHandle,
+};
 use ruma::{
     events::{
         poll::{
@@ -68,6 +71,9 @@ pub(super) enum Flow {
     Local {
         /// The transaction id we've used in requests associated to this event.
         txn_id: OwnedTransactionId,
+
+        /// A handle to abort sending this event.
+        abort_handle: Option<AbortSendHandle>,
     },
 
     /// The event has been received from a remote source (sync, pagination,
@@ -376,6 +382,9 @@ impl<'a, 'o> TimelineEventHandler<'a, 'o> {
                 AnyMessageLikeEventContent::UnstablePollEnd(c) => self.handle_poll_end(c),
                 AnyMessageLikeEventContent::CallInvite(_) => {
                     self.add(should_add, TimelineItemContent::CallInvite);
+                }
+                AnyMessageLikeEventContent::CallNotify(_) => {
+                    self.add(should_add, TimelineItemContent::CallNotify)
                 }
 
                 // TODO
@@ -850,10 +859,11 @@ impl<'a, 'o> TimelineEventHandler<'a, 'o> {
         let mut reactions = self.pending_reactions().unwrap_or_default();
 
         let kind: EventTimelineItemKind = match &self.ctx.flow {
-            Flow::Local { txn_id } => {
+            Flow::Local { txn_id, abort_handle } => {
                 LocalEventTimelineItem {
                     send_state: EventSendState::NotSentYet,
                     transaction_id: txn_id.to_owned(),
+                    abort_handle: abort_handle.clone(),
                 }
             }
             .into(),
@@ -995,16 +1005,14 @@ impl<'a, 'o> TimelineEventHandler<'a, 'o> {
                 // pending local echo, or at the start if there is no such item.
                 let insert_idx = latest_event_idx.map_or(0, |idx| idx + 1);
 
-                let id = match removed_event_item_id {
+                trace!("Adding new remote timeline item after all non-pending events");
+                let new_item = match removed_event_item_id {
                     // If a previous version of the same item (usually a local
                     // echo) was removed and we now need to add it again, reuse
                     // the previous item's ID.
-                    Some(id) => id,
-                    None => self.meta.next_internal_id(),
+                    Some(id) => TimelineItem::new(item, id),
+                    None => self.meta.new_timeline_item(item),
                 };
-
-                trace!("Adding new remote timeline item after all non-pending events");
-                let new_item = TimelineItem::new(item, id);
 
                 // Keep push semantics, if we're inserting at the front or the back.
                 if insert_idx == self.items.len() {

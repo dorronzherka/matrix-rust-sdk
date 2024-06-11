@@ -301,8 +301,8 @@ impl Device {
     ///
     /// Returns a `VerificationRequest` object and a to-device request that
     /// needs to be sent out.
-    pub async fn request_verification(&self) -> (VerificationRequest, OutgoingVerificationRequest) {
-        self.request_verification_helper(None).await
+    pub fn request_verification(&self) -> (VerificationRequest, OutgoingVerificationRequest) {
+        self.request_verification_helper(None)
     }
 
     /// Request an interactive verification with this `Device`.
@@ -313,24 +313,22 @@ impl Device {
     /// # Arguments
     ///
     /// * `methods` - The verification methods that we want to support.
-    pub async fn request_verification_with_methods(
+    pub fn request_verification_with_methods(
         &self,
         methods: Vec<VerificationMethod>,
     ) -> (VerificationRequest, OutgoingVerificationRequest) {
-        self.request_verification_helper(Some(methods)).await
+        self.request_verification_helper(Some(methods))
     }
 
-    async fn request_verification_helper(
+    fn request_verification_helper(
         &self,
         methods: Option<Vec<VerificationMethod>>,
     ) -> (VerificationRequest, OutgoingVerificationRequest) {
-        self.verification_machine
-            .request_to_device_verification(
-                self.user_id(),
-                vec![self.device_id().to_owned()],
-                methods,
-            )
-            .await
+        self.verification_machine.request_to_device_verification(
+            self.user_id(),
+            vec![self.device_id().to_owned()],
+            methods,
+        )
     }
 
     /// Get the Olm sessions that belong to this device.
@@ -848,7 +846,12 @@ impl ReadOnlyDevice {
     }
 
     /// Update a device with a new device keys struct.
-    pub(crate) fn update_device(&mut self, device_keys: &DeviceKeys) -> Result<(), SignatureError> {
+    ///
+    /// Returns `true` if any changes were made to the data.
+    pub(crate) fn update_device(
+        &mut self,
+        device_keys: &DeviceKeys,
+    ) -> Result<bool, SignatureError> {
         self.verify_device_keys(device_keys)?;
 
         if self.user_id() != device_keys.user_id || self.device_id() != device_keys.device_id {
@@ -858,10 +861,13 @@ impl ReadOnlyDevice {
                 self.ed25519_key().map(Box::new),
                 device_keys.ed25519_key().map(Box::new),
             ))
-        } else {
+        } else if self.inner.as_ref() != device_keys {
             self.inner = device_keys.clone().into();
 
-            Ok(())
+            Ok(true)
+        } else {
+            // no changes needed
+            Ok(false)
         }
     }
 
@@ -1066,9 +1072,11 @@ pub(crate) mod tests {
 
         let mut device_keys = device_keys();
         device_keys.unsigned.device_display_name = Some(display_name.clone());
-        device.update_device(&device_keys).unwrap();
-
+        assert!(device.update_device(&device_keys).unwrap());
         assert_eq!(&display_name, device.display_name().as_ref().unwrap());
+
+        // A second call to `update_device` with the same data should return `false`.
+        assert!(!device.update_device(&device_keys).unwrap());
     }
 
     #[test]

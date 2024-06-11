@@ -11,9 +11,15 @@ Breaking changes:
   `Media::get_file`/`Media::remove_file`/`Media::get_thumbnail`/`Media::remove_thumbnail`
 - A custom sliding sync proxy set with `ClientBuilder::sliding_sync_proxy` now takes precedence over a discovered proxy.
 - `Client::get_profile` was moved to `Account` and renamed to `Account::fetch_user_profile_of`. `Account::get_profile` was renamed to `Account::fetch_user_profile`.
+- `generate_image_thumbnail` now returns a `Thumbnail`.
+- It is now possible to select the format of a generated thumbnail.
+  - `generate_image_thumbnail` takes a `ThumbnailFormat`.
+  - `AttachmentConfig::generate_thumbnail` takes a `ThumbnailFormat`.
 
 Additions:
 
+- Expose new method `Client::Oidc::login_with_qr_code()`.
+  ([#3466](https://github.com/matrix-org/matrix-rust-sdk/pull/3466))
 - Add the `ClientBuilder::add_root_certificates()` method which re-exposes the
   `reqwest::ClientBuilder::add_root_certificate()` functionality.
 - Add `Room::get_user_power_level(user_id)` and `Room::get_suggested_user_role(user_id)` to be able to fetch power level info about an user without loading the room member list.
@@ -21,6 +27,7 @@ Additions:
   outbound session for that room. Can be used by clients as a dev tool like the `/discardsession` command.
 - Add a new `LinkedChunk` data structure to represents all events per room ([#3166](https://github.com/matrix-org/matrix-rust-sdk/pull/3166)).
 - Add new methods for tracking (on device only) the user's recently visited rooms called `Account::track_recently_visited_room(roomId)` and `Account::get_recently_visited_rooms()`
+- Add `send_call_notification` and `send_call_notification_if_needed` methods. This allows to implement sending ring events on call start.
 
 # 0.7.0
 

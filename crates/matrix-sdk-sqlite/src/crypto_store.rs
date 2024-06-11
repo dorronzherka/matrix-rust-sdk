@@ -708,11 +708,7 @@ impl CryptoStore for SqliteCryptoStore {
         let conn = self.acquire().await?;
         if let Some(i) = conn.get_kv("identity").await? {
             let pickle = self.deserialize_value(&i)?;
-            Ok(Some(
-                PrivateCrossSigningIdentity::from_pickle(pickle)
-                    .await
-                    .map_err(|_| Error::Unpickle)?,
-            ))
+            Ok(Some(PrivateCrossSigningIdentity::from_pickle(pickle).map_err(|_| Error::Unpickle)?))
         } else {
             Ok(None)
         }
@@ -884,6 +880,28 @@ impl CryptoStore for SqliteCryptoStore {
             .await?;
 
         Ok(())
+    }
+
+    async fn save_inbound_group_sessions(
+        &self,
+        sessions: Vec<InboundGroupSession>,
+        backed_up_to_version: Option<&str>,
+    ) -> matrix_sdk_crypto::store::Result<(), Self::Error> {
+        // Sanity-check that the data in the sessions corresponds to backed_up_version
+        sessions.iter().for_each(|s| {
+            let backed_up = s.backed_up();
+            if backed_up != backed_up_to_version.is_some() {
+                warn!(
+                    backed_up,
+                    backed_up_to_version,
+                    "Session backed-up flag does not correspond to backup version setting",
+                );
+            }
+        });
+
+        // Currently, this store doesn't save the backup version separately, so this
+        // just delegates to save_changes.
+        self.save_changes(Changes { inbound_group_sessions: sessions, ..Changes::default() }).await
     }
 
     async fn get_sessions(&self, sender_key: &str) -> Result<Option<Arc<Mutex<Vec<Session>>>>> {
